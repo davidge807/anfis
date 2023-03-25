@@ -8,6 +8,7 @@ Created on Thu Apr 03 07:30:34 2014
 import itertools
 import numpy as np
 from membership import mfDerivs
+from membership import membershipfunction
 import copy
 
 class ANFIS:
@@ -31,26 +32,72 @@ class ANFIS:
 
     def __init__(self, X, Y, memFunction):
         
-        # checks
-        if(len(X) != len(Y)):
-            raise Exception("Y length must be the same as X length")
+        # Comprobar que X es una matriz NumPy 2D y Y es una matriz NumPy 1D o 2D
+        if not isinstance(X, np.ndarray) or len(X.shape) != 2:
+            raise ValueError("X must be a NumPy 2D array")
+        if not isinstance(Y, np.ndarray) or len(Y.shape) not in (1, 2):
+            raise ValueError("Y must be a NumPy 1D or 2D array")
+    
+        # Comprobar que el número de variables de entrada coincide con el número de conjuntos difusos
+        # especificados para cada variable en memFunction
+        # if X.shape[1] != len(memFunction.MFList):
+            # raise ValueError("Number of input variables does not match number of fuzzy variable sets")
+    
+        # Comprobar que memFunction es un objeto de la clase MemFuncs
+        if not isinstance(memFunction, membershipfunction.MemFuncs):
+            raise ValueError("memFunction must be an object of the MemFuncs class")
+    
+        # Comprobar que el número total de reglas no es mayor que un número máximo razonable
+        if len(memFunction.MFList) ** X.shape[1] > 10000:
+            raise ValueError("Number of rules is too high")
+    
+        # Comprobar que las funciones de membresía en memFunction son todas válidas
+        valid_functions = membershipfunction.MemFuncs.funcDict.keys()
+        for var_set in memFunction.MFList:
+            for mf in var_set:
+                if mf[0] not in valid_functions:
+                    raise ValueError(f"Invalid membership function: {mf[0]}")
+                try:
+                    membershipfunction.MemFuncs.funcDict[mf[0]](0, **mf[1])
+                except:
+                    raise ValueError(f"Invalid parameters for membership function: {mf[0]}")
+    
+        # Comprobar que no hay conjuntos difusos redundantes
+        for i in range(len(memFunction.MFList)):
+            for j in range(i + 1, len(memFunction.MFList)):
+                if memFunction.MFList[i] == memFunction.MFList[j]:
+                    raise ValueError("Redundant fuzzy variable sets")
         
-        # initializations
+        # Comprobaciones adicionales (opcional)
+    
+        # Comprobación exitosa, inicializar el objeto
         self.X = np.array(copy.copy(X))
         self.Y = np.array(copy.copy(Y))
         self.XLen = len(self.X)
+    
         self.memClass = copy.deepcopy(memFunction)
         self.memFuncs = self.memClass.MFList
         self.memFuncsByVariable = [[x for x in range(len(self.memFuncs[z]))] for z in range(len(self.memFuncs))]
+    
         self.rules = np.array(list(itertools.product(*self.memFuncsByVariable)))
+    
         self.consequents = np.empty(self.Y.ndim * len(self.rules) * (self.X.shape[1] + 1))
         self.consequents.fill(0)
+    
         self.errors = np.empty(0)
         self.memFuncsHomo = all(len(i)==len(self.memFuncsByVariable[0]) for i in self.memFuncsByVariable)
         self.trainingType = 'Not trained yet'
+
         
         
-        
+    def __str__(self):
+        # Imprimir parámetros importantes
+        str_repr = "ANFIS object\n"
+        str_repr += f"Number of input variables: {self.X.shape[1]}\n"
+        str_repr += f"Number of output variables: {self.Y.ndim}\n"
+        str_repr += f"Number of rules: {len(self.rules)}\n"
+        str_repr += f"Training type: {self.trainingType}\n"
+        return str_repr
         
 
     def LSE(self, A, B, initialGamma = 1000.):
@@ -151,52 +198,34 @@ class ANFIS:
             plt.ylabel('error')
             plt.xlabel('epoch')
             plt.show()
-
-    # def plotMF(self, x, inputVar):
-    #     import matplotlib.pyplot as plt
-    #     from skfuzzy import gaussmf, gbellmf, sigmf
-    #     x = self.X
-    #     for mf in range(len(self.memFuncs[inputVar])):
-    #         if self.memFuncs[inputVar][mf][0] == 'gaussmf':
-    #             y = gaussmf(x,**self.memClass.MFList[inputVar][mf][1])
-    #         elif self.memFuncs[inputVar][mf][0] == 'gbellmf':
-    #             y = gbellmf(x,**self.memClass.MFList[inputVar][mf][1])
-    #         elif self.memFuncs[inputVar][mf][0] == 'sigmf':
-    #             y = sigmf(x,**self.memClass.MFList[inputVar][mf][1])
-
-    #         plt.plot(x,y)
-
-    #     plt.show()
         
     
     def plotMF(self, inputVar):
-        
         import matplotlib.pyplot as plt
         from skfuzzy import gaussmf, gbellmf, sigmf
-        
-        legend = []
-        
-        for mf in range(len(self.memFuncs[inputVar])):
-        
-            funcType = self.memFuncs[inputVar][mf][0]
-            funcParameters = self.memFuncs[inputVar][mf][1].values()
-        
+    
+        fig, ax = plt.subplots()
+                
+        x = np.unique(self.X[:, inputVar])
+    
+        for mf_idx, mf in enumerate(self.memFuncs[inputVar]):
+            funcType, funcParams = mf
+    
             if funcType == 'gaussmf':
-                y = gaussmf(self.X,**self.memClass.MFList[inputVar][mf][1])
-            
+                y = gaussmf(x, **self.memClass.MFList[inputVar][mf_idx][1])
             elif funcType == 'gbellmf':
-                y = gbellmf(self.X,**self.memClass.MFList[inputVar][mf][1])
-            
+                y = gbellmf(x, **self.memClass.MFList[inputVar][mf_idx][1])
             elif funcType == 'sigmf':
-                y = sigmf(self.X,**self.memClass.MFList[inputVar][mf][1])
-
-            plt.plot(self.X, y)
-            legend.append(funcType 
-                          + '(' 
-                          + ', '.join(str(param) for param in funcParameters) 
-                          + ')')
-        
-        plt.legend(legend)
+                y = sigmf(x, **self.memClass.MFList[inputVar][mf_idx][1])
+            else:
+                raise ValueError(f"Membership function type {funcType} is not supported")
+    
+            ax.plot(x, y, label=f"{funcType} ({','.join(str(round(param,2)) for param in funcParams.values())})")
+    
+        ax.legend()
+        ax.set_xlabel(f"Input variable {inputVar}")
+        ax.set_ylabel("Membership degree")
+        ax.set_title(f"Membership functions of input variable {inputVar}")
         plt.show()
                 
 
