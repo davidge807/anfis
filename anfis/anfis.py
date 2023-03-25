@@ -4,6 +4,7 @@ Created on Thu Apr 03 07:30:34 2014
 
 @author: tim.meggs
 """
+
 import itertools
 import numpy as np
 from membership import mfDerivs
@@ -29,6 +30,12 @@ class ANFIS:
     """
 
     def __init__(self, X, Y, memFunction):
+        
+        # checks
+        if(len(X) != len(Y)):
+            raise Exception("Y length must be the same as X length")
+        
+        # initializations
         self.X = np.array(copy.copy(X))
         self.Y = np.array(copy.copy(Y))
         self.XLen = len(self.X)
@@ -41,6 +48,10 @@ class ANFIS:
         self.errors = np.empty(0)
         self.memFuncsHomo = all(len(i)==len(self.memFuncsByVariable[0]) for i in self.memFuncsByVariable)
         self.trainingType = 'Not trained yet'
+        
+        
+        
+        
 
     def LSE(self, A, B, initialGamma = 1000.):
         coeffMat = A
@@ -141,21 +152,54 @@ class ANFIS:
             plt.xlabel('epoch')
             plt.show()
 
-    def plotMF(self, x, inputVar):
+    # def plotMF(self, x, inputVar):
+    #     import matplotlib.pyplot as plt
+    #     from skfuzzy import gaussmf, gbellmf, sigmf
+    #     x = self.X
+    #     for mf in range(len(self.memFuncs[inputVar])):
+    #         if self.memFuncs[inputVar][mf][0] == 'gaussmf':
+    #             y = gaussmf(x,**self.memClass.MFList[inputVar][mf][1])
+    #         elif self.memFuncs[inputVar][mf][0] == 'gbellmf':
+    #             y = gbellmf(x,**self.memClass.MFList[inputVar][mf][1])
+    #         elif self.memFuncs[inputVar][mf][0] == 'sigmf':
+    #             y = sigmf(x,**self.memClass.MFList[inputVar][mf][1])
+
+    #         plt.plot(x,y)
+
+    #     plt.show()
+        
+    
+    def plotMF(self, inputVar):
+        
         import matplotlib.pyplot as plt
         from skfuzzy import gaussmf, gbellmf, sigmf
-
+        
+        legend = []
+        
         for mf in range(len(self.memFuncs[inputVar])):
-            if self.memFuncs[inputVar][mf][0] == 'gaussmf':
-                y = gaussmf(x,**self.memClass.MFList[inputVar][mf][1])
-            elif self.memFuncs[inputVar][mf][0] == 'gbellmf':
-                y = gbellmf(x,**self.memClass.MFList[inputVar][mf][1])
-            elif self.memFuncs[inputVar][mf][0] == 'sigmf':
-                y = sigmf(x,**self.memClass.MFList[inputVar][mf][1])
+        
+            funcType = self.memFuncs[inputVar][mf][0]
+            funcParameters = self.memFuncs[inputVar][mf][1].values()
+        
+            if funcType == 'gaussmf':
+                y = gaussmf(self.X,**self.memClass.MFList[inputVar][mf][1])
+            
+            elif funcType == 'gbellmf':
+                y = gbellmf(self.X,**self.memClass.MFList[inputVar][mf][1])
+            
+            elif funcType == 'sigmf':
+                y = sigmf(self.X,**self.memClass.MFList[inputVar][mf][1])
 
-            plt.plot(x,y,'r')
-
+            plt.plot(self.X, y)
+            legend.append(funcType 
+                          + '(' 
+                          + ', '.join(str(param) for param in funcParameters) 
+                          + ')')
+        
+        plt.legend(legend)
         plt.show()
+                
+
 
     def plotResults(self):
         if self.trainingType == 'Not trained yet':
